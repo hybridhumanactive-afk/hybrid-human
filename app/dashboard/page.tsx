@@ -6,7 +6,9 @@ import {
   useState,
 } from "react";
 
-import { useRouter } from "next/navigation";
+import {
+  useRouter,
+} from "next/navigation";
 
 import {
   onAuthStateChanged,
@@ -18,8 +20,6 @@ import {
   doc,
   getDoc,
   getDocs,
-  query,
-  where,
 } from "firebase/firestore";
 
 import {
@@ -31,6 +31,7 @@ import {
   HeartPulse,
   LogOut,
   Moon,
+  Route,
   Scale,
   Settings,
   SmilePlus,
@@ -72,10 +73,32 @@ type Workout = {
   source: string;
 };
 
-function getStartOfWeekKey() {
-  const now = new Date();
+type GoogleFitDailyData = {
+  steps: number | null;
+  distanceMeters: number | null;
+  distanceKm: number | null;
+  heartRateAverage: number | null;
+  heartRateMin: number | null;
+  heartRateMax: number | null;
+  date: string | null;
+  provider: string | null;
+};
 
-  const day = now.getDay();
+function getTodayKey() {
+  return new Date()
+    .toISOString()
+    .slice(
+      0,
+      10
+    );
+}
+
+function getStartOfWeekKey() {
+  const now =
+    new Date();
+
+  const day =
+    now.getDay();
 
   const difference =
     day === 0
@@ -86,7 +109,8 @@ function getStartOfWeekKey() {
     new Date(
       now.getFullYear(),
       now.getMonth(),
-      now.getDate() + difference
+      now.getDate() +
+        difference
     );
 
   const year =
@@ -95,18 +119,25 @@ function getStartOfWeekKey() {
   const month =
     String(
       monday.getMonth() + 1
-    ).padStart(2, "0");
+    ).padStart(
+      2,
+      "0"
+    );
 
   const date =
     String(
       monday.getDate()
-    ).padStart(2, "0");
+    ).padStart(
+      2,
+      "0"
+    );
 
   return `${year}-${month}-${date}`;
 }
 
 function getStartOfMonthKey() {
-  const now = new Date();
+  const now =
+    new Date();
 
   const year =
     now.getFullYear();
@@ -114,7 +145,10 @@ function getStartOfMonthKey() {
   const month =
     String(
       now.getMonth() + 1
-    ).padStart(2, "0");
+    ).padStart(
+      2,
+      "0"
+    );
 
   return `${year}-${month}-01`;
 }
@@ -123,14 +157,67 @@ export default function DashboardPage() {
   const router =
     useRouter();
 
-  const [loading, setLoading] =
-    useState(true);
+  const [
+    loading,
+    setLoading,
+  ] =
+    useState(
+      true
+    );
 
-  const [profile, setProfile] =
-    useState<UserProfile | null>(null);
+  const [
+    profile,
+    setProfile,
+  ] =
+    useState<UserProfile | null>(
+      null
+    );
 
-  const [workouts, setWorkouts] =
-    useState<Workout[]>([]);
+  const [
+    workouts,
+    setWorkouts,
+  ] =
+    useState<Workout[]>(
+      []
+    );
+
+  const [
+    googleFit,
+    setGoogleFit,
+  ] =
+    useState<GoogleFitDailyData>({
+      steps:
+        null,
+
+      distanceMeters:
+        null,
+
+      distanceKm:
+        null,
+
+      heartRateAverage:
+        null,
+
+      heartRateMin:
+        null,
+
+      heartRateMax:
+        null,
+
+      date:
+        null,
+
+      provider:
+        null,
+    });
+
+  const [
+    googleFitConnected,
+    setGoogleFitConnected,
+  ] =
+    useState(
+      false
+    );
 
   useEffect(() => {
     const unsubscribe =
@@ -200,7 +287,9 @@ export default function DashboardPage() {
 
             const workoutData =
               workoutSnapshot.docs.map(
-                (document) => {
+                (
+                  document
+                ) => {
                   const data =
                     document.data();
 
@@ -242,7 +331,10 @@ export default function DashboardPage() {
               );
 
             workoutData.sort(
-              (a, b) =>
+              (
+                a,
+                b
+              ) =>
                 b.date.localeCompare(
                   a.date
                 )
@@ -251,13 +343,19 @@ export default function DashboardPage() {
             setWorkouts(
               workoutData
             );
+
+            await loadGoogleFitData(
+              user.uid
+            );
           } catch (error) {
             console.error(
               "Dashboard loading error:",
               error
             );
           } finally {
-            setLoading(false);
+            setLoading(
+              false
+            );
           }
         }
       );
@@ -266,8 +364,121 @@ export default function DashboardPage() {
       unsubscribe();
   }, [router]);
 
+  async function loadGoogleFitData(
+    uid: string
+  ) {
+    try {
+      const connectionReference =
+        doc(
+          db,
+          "users",
+          uid,
+          "deviceConnections",
+          "google_fit"
+        );
+
+      const connectionSnapshot =
+        await getDoc(
+          connectionReference
+        );
+
+      const connected =
+        connectionSnapshot.exists() &&
+        connectionSnapshot.data()
+          .status ===
+          "connected";
+
+      setGoogleFitConnected(
+        connected
+      );
+
+      const dateId =
+        getTodayKey();
+
+      const googleFitReference =
+        doc(
+          db,
+          "users",
+          uid,
+          "googleFitDaily",
+          dateId
+        );
+
+      const googleFitSnapshot =
+        await getDoc(
+          googleFitReference
+        );
+
+      if (
+        !googleFitSnapshot.exists()
+      ) {
+        return;
+      }
+
+      const data =
+        googleFitSnapshot.data();
+
+      setGoogleFit({
+        steps:
+          typeof data.steps ===
+          "number"
+            ? data.steps
+            : null,
+
+        distanceMeters:
+          typeof data.distanceMeters ===
+          "number"
+            ? data.distanceMeters
+            : null,
+
+        distanceKm:
+          typeof data.distanceKm ===
+          "number"
+            ? data.distanceKm
+            : null,
+
+        heartRateAverage:
+          typeof data.heartRateAverage ===
+          "number"
+            ? data.heartRateAverage
+            : null,
+
+        heartRateMin:
+          typeof data.heartRateMin ===
+          "number"
+            ? data.heartRateMin
+            : null,
+
+        heartRateMax:
+          typeof data.heartRateMax ===
+          "number"
+            ? data.heartRateMax
+            : null,
+
+        date:
+          typeof data.date ===
+          "string"
+            ? data.date
+            : dateId,
+
+        provider:
+          typeof data.provider ===
+          "string"
+            ? data.provider
+            : "google_fit",
+      });
+    } catch (error) {
+      console.error(
+        "Google Fit dashboard loading error:",
+        error
+      );
+    }
+  }
+
   async function handleLogout() {
-    await signOut(auth);
+    await signOut(
+      auth
+    );
 
     router.replace(
       "/login"
@@ -281,7 +492,9 @@ export default function DashboardPage() {
 
       return workouts
         .filter(
-          (workout) =>
+          (
+            workout
+          ) =>
             workout.date >=
             weekStart
         )
@@ -303,7 +516,9 @@ export default function DashboardPage() {
 
       return workouts
         .filter(
-          (workout) =>
+          (
+            workout
+          ) =>
             workout.date >=
             monthStart
         )
@@ -324,7 +539,9 @@ export default function DashboardPage() {
         getStartOfWeekKey();
 
       return workouts.filter(
-        (workout) =>
+        (
+          workout
+        ) =>
           workout.date >=
           weekStart
       ).length;
@@ -335,7 +552,45 @@ export default function DashboardPage() {
       ? workouts[0]
       : null;
 
-  if (loading) {
+  const stepValue =
+    googleFit.steps !==
+    null
+      ? googleFit.steps.toLocaleString()
+      : "0";
+
+  const distanceValue =
+    googleFit.distanceKm !==
+    null
+      ? googleFit.distanceKm.toFixed(
+          2
+        )
+      : "--";
+
+  const averageHeartRateValue =
+    googleFit.heartRateAverage !==
+    null
+      ? String(
+          Math.round(
+            googleFit.heartRateAverage
+          )
+        )
+      : "--";
+
+  const heartRateRange =
+    googleFit.heartRateMin !==
+      null &&
+    googleFit.heartRateMax !==
+      null
+      ? `${Math.round(
+          googleFit.heartRateMin
+        )}-${Math.round(
+          googleFit.heartRateMax
+        )} bpm`
+      : "No HR data today";
+
+  if (
+    loading
+  ) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#06100c] text-slate-400">
         Loading Hybrid Human...
@@ -347,7 +602,9 @@ export default function DashboardPage() {
     profile?.firstName ||
     auth.currentUser
       ?.displayName
-      ?.split(" ")[0] ||
+      ?.split(
+        " "
+      )[0] ||
     "Athlete";
 
   return (
@@ -360,12 +617,15 @@ export default function DashboardPage() {
           <div className="flex items-center gap-3">
 
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500 text-black">
+
               <HeartPulse
                 size={24}
               />
+
             </div>
 
             <div>
+
               <h1 className="font-bold">
                 Hybrid Human
               </h1>
@@ -373,6 +633,7 @@ export default function DashboardPage() {
               <p className="text-xs text-slate-500">
                 Human Performance
               </p>
+
             </div>
 
           </div>
@@ -382,7 +643,9 @@ export default function DashboardPage() {
             <SidebarButton
               active
               icon={
-                <Activity size={19} />
+                <Activity
+                  size={19}
+                />
               }
               label="Dashboard"
               onClick={() =>
@@ -394,7 +657,9 @@ export default function DashboardPage() {
 
             <SidebarButton
               icon={
-                <Dumbbell size={19} />
+                <Dumbbell
+                  size={19}
+                />
               }
               label="Workouts"
               onClick={() =>
@@ -406,7 +671,9 @@ export default function DashboardPage() {
 
             <SidebarButton
               icon={
-                <SmilePlus size={19} />
+                <SmilePlus
+                  size={19}
+                />
               }
               label="Wellness"
               onClick={() =>
@@ -418,7 +685,9 @@ export default function DashboardPage() {
 
             <SidebarButton
               icon={
-                <Scale size={19} />
+                <Scale
+                  size={19}
+                />
               }
               label="Weight"
               onClick={() =>
@@ -430,7 +699,9 @@ export default function DashboardPage() {
 
             <SidebarButton
               icon={
-                <Trophy size={19} />
+                <Trophy
+                  size={19}
+                />
               }
               label="Leaderboard"
               onClick={() =>
@@ -442,7 +713,9 @@ export default function DashboardPage() {
 
             <SidebarButton
               icon={
-                <Watch size={19} />
+                <Watch
+                  size={19}
+                />
               }
               label="Devices"
               onClick={() =>
@@ -454,7 +727,9 @@ export default function DashboardPage() {
 
             <SidebarButton
               icon={
-                <UserRound size={19} />
+                <UserRound
+                  size={19}
+                />
               }
               label="Profile"
               onClick={() =>
@@ -466,7 +741,9 @@ export default function DashboardPage() {
 
             <SidebarButton
               icon={
-                <Settings size={19} />
+                <Settings
+                  size={19}
+                />
               }
               label="Settings"
               onClick={() =>
@@ -481,16 +758,19 @@ export default function DashboardPage() {
           <div className="mt-auto">
 
             <button
+              type="button"
               onClick={
                 handleLogout
               }
               className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-slate-500 transition hover:bg-red-500/10 hover:text-red-400"
             >
+
               <LogOut
                 size={19}
               />
 
               Sign out
+
             </button>
 
           </div>
@@ -502,6 +782,7 @@ export default function DashboardPage() {
           <header className="flex h-20 items-center justify-between border-b border-white/10 px-6 lg:px-10">
 
             <div>
+
               <p className="text-sm text-slate-500">
                 Welcome back
               </p>
@@ -509,17 +790,24 @@ export default function DashboardPage() {
               <h2 className="text-lg font-semibold">
                 {name}
               </h2>
+
             </div>
 
             <div className="flex items-center gap-3">
 
-              <button className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-slate-400 transition hover:text-white">
+              <button
+                type="button"
+                className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-slate-400 transition hover:text-white"
+              >
+
                 <Bell
                   size={19}
                 />
+
               </button>
 
               <button
+                type="button"
                 onClick={() =>
                   router.push(
                     "/profile"
@@ -527,9 +815,13 @@ export default function DashboardPage() {
                 }
                 className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500 font-semibold text-black"
               >
+
                 {name
-                  .charAt(0)
+                  .charAt(
+                    0
+                  )
                   .toUpperCase()}
+
               </button>
 
             </div>
@@ -554,13 +846,52 @@ export default function DashboardPage() {
 
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {googleFitConnected && (
+              <div className="mb-6 flex flex-col gap-4 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-5 sm:flex-row sm:items-center sm:justify-between">
+
+                <div>
+
+                  <div className="flex items-center gap-2">
+
+                    <HeartPulse
+                      size={18}
+                      className="text-emerald-400"
+                    />
+
+                    <p className="font-semibold text-emerald-300">
+                      Google Fit connected
+                    </p>
+
+                  </div>
+
+                  <p className="mt-2 text-sm text-slate-500">
+                    Today&apos;s synced activity data is available on your dashboard.
+                  </p>
+
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    router.push(
+                      "/integrations/google-fit"
+                    )
+                  }
+                  className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-400 transition hover:bg-emerald-500/20"
+                >
+                  Manage Google Fit
+                </button>
+
+              </div>
+            )}
+
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
 
               <MetricCard
                 title="Recovery"
                 value="--"
                 unit="%"
-                subtitle="Waiting for wearable data"
+                subtitle="Waiting for recovery data"
                 icon={
                   <Zap
                     size={22}
@@ -570,11 +901,42 @@ export default function DashboardPage() {
 
               <MetricCard
                 title="Steps"
-                value="0"
+                value={
+                  stepValue
+                }
                 unit=""
-                subtitle="Today"
+                subtitle={
+                  googleFit.steps !==
+                  null
+                    ? "Google Fit · Today"
+                    : "No synced steps today"
+                }
                 icon={
                   <Footprints
+                    size={22}
+                  />
+                }
+              />
+
+              <MetricCard
+                title="Distance"
+                value={
+                  distanceValue
+                }
+                unit={
+                  googleFit.distanceKm !==
+                  null
+                    ? "km"
+                    : ""
+                }
+                subtitle={
+                  googleFit.distanceKm !==
+                  null
+                    ? "Google Fit · Today"
+                    : "No distance data today"
+                }
+                icon={
+                  <Route
                     size={22}
                   />
                 }
@@ -593,10 +955,19 @@ export default function DashboardPage() {
               />
 
               <MetricCard
-                title="Resting HR"
-                value="--"
-                unit="bpm"
-                subtitle="Latest reading"
+                title="Average HR"
+                value={
+                  averageHeartRateValue
+                }
+                unit={
+                  googleFit.heartRateAverage !==
+                  null
+                    ? "bpm"
+                    : ""
+                }
+                subtitle={
+                  heartRateRange
+                }
                 icon={
                   <Heart
                     size={22}
@@ -658,8 +1029,12 @@ export default function DashboardPage() {
               />
 
               <QuickAction
-                title="Connect Device"
-                subtitle="Apple, Garmin & Samsung"
+                title="Connected Devices"
+                subtitle={
+                  googleFitConnected
+                    ? "Google Fit connected"
+                    : "Connect a health platform"
+                }
                 icon={
                   <Watch
                     size={20}
@@ -745,6 +1120,7 @@ export default function DashboardPage() {
                     </div>
 
                     <button
+                      type="button"
                       onClick={() =>
                         router.push(
                           "/workouts"
@@ -775,6 +1151,7 @@ export default function DashboardPage() {
                       </p>
 
                       <button
+                        type="button"
                         onClick={() =>
                           router.push(
                             "/workouts"
@@ -865,6 +1242,7 @@ export default function DashboardPage() {
                 </div>
 
                 <button
+                  type="button"
                   onClick={() =>
                     router.push(
                       "/leaderboard"
@@ -900,6 +1278,7 @@ export default function DashboardPage() {
                 </div>
 
                 <button
+                  type="button"
                   onClick={() =>
                     router.push(
                       "/wellness"
@@ -924,6 +1303,7 @@ export default function DashboardPage() {
                   </p>
 
                   <button
+                    type="button"
                     onClick={() =>
                       router.push(
                         "/profile"
@@ -989,7 +1369,10 @@ function SidebarButton({
 }) {
   return (
     <button
-      onClick={onClick}
+      type="button"
+      onClick={
+        onClick
+      }
       className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left transition ${
         active
           ? "bg-emerald-500/10 text-emerald-400"
@@ -1065,7 +1448,10 @@ function QuickAction({
 }) {
   return (
     <button
-      onClick={onClick}
+      type="button"
+      onClick={
+        onClick
+      }
       className="rounded-2xl border border-white/10 bg-white/[0.025] p-4 text-left transition hover:border-emerald-500/30 hover:bg-emerald-500/5"
     >
 

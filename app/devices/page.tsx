@@ -14,6 +14,12 @@ import {
 } from "firebase/auth";
 
 import {
+  doc,
+  getDoc,
+} from "firebase/firestore";
+
+import {
+  Activity,
   ArrowLeft,
   CheckCircle2,
   Clock3,
@@ -26,6 +32,7 @@ import {
 
 import {
   auth,
+  db,
 } from "@/lib/firebase";
 
 import {
@@ -39,6 +46,12 @@ import type {
   DeviceConnection,
   DeviceProvider,
 } from "@/lib/integrations";
+
+type GoogleFitStatus =
+  | "not_connected"
+  | "pending"
+  | "connected"
+  | "error";
 
 export default function DevicesPage() {
   const router =
@@ -81,10 +94,68 @@ export default function DevicesPage() {
     );
 
   const [
+    googleFitStatus,
+    setGoogleFitStatus,
+  ] =
+    useState<GoogleFitStatus>(
+      "not_connected"
+    );
+
+  const [
     message,
     setMessage,
   ] =
     useState("");
+
+  async function loadGoogleFitConnection(
+    userId: string
+  ) {
+    try {
+      const reference =
+        doc(
+          db,
+          "users",
+          userId,
+          "deviceConnections",
+          "google_fit"
+        );
+
+      const snapshot =
+        await getDoc(
+          reference
+        );
+
+      if (!snapshot.exists()) {
+        setGoogleFitStatus(
+          "not_connected"
+        );
+
+        return;
+      }
+
+      const data =
+        snapshot.data();
+
+      const status =
+        data.status as
+          | GoogleFitStatus
+          | undefined;
+
+      setGoogleFitStatus(
+        status ??
+          "not_connected"
+      );
+    } catch (error) {
+      console.error(
+        "Google Fit connection loading error:",
+        error
+      );
+
+      setGoogleFitStatus(
+        "error"
+      );
+    }
+  }
 
   async function loadConnections(
     userId: string
@@ -121,6 +192,10 @@ export default function DevicesPage() {
 
     setSamsungConnection(
       samsung
+    );
+
+    await loadGoogleFitConnection(
+      userId
     );
   }
 
@@ -337,6 +412,12 @@ export default function DevicesPage() {
     }
   }
 
+  function openGoogleFit() {
+    router.push(
+      "/integrations/google-fit"
+    );
+  }
+
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#06100c] text-slate-400">
@@ -360,7 +441,7 @@ export default function DevicesPage() {
   return (
     <main className="min-h-screen bg-[#06100c] px-5 py-8 text-white">
 
-      <div className="mx-auto max-w-6xl">
+      <div className="mx-auto max-w-7xl">
 
         <div className="mb-8 flex items-center justify-between gap-4">
 
@@ -431,7 +512,7 @@ export default function DevicesPage() {
           </div>
         )}
 
-        <div className="grid gap-5 lg:grid-cols-3">
+        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
 
           <StandardDeviceCard
             name="Garmin"
@@ -561,6 +642,58 @@ export default function DevicesPage() {
 
           </div>
 
+          <div className="rounded-3xl border border-white/10 bg-white/[0.025] p-6">
+
+            <div className="flex items-start justify-between gap-4">
+
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-400">
+
+                <Activity
+                  size={28}
+                />
+
+              </div>
+
+              <StatusBadge
+                status={
+                  googleFitStatus
+                }
+              />
+
+            </div>
+
+            <h2 className="mt-6 text-xl font-semibold">
+              Google Fit
+            </h2>
+
+            <p className="mt-2 min-h-16 text-sm leading-6 text-slate-500">
+              Import Google Fit activity,
+              steps, workouts, heart rate,
+              distance and health metrics.
+            </p>
+
+            <button
+              type="button"
+              onClick={
+                openGoogleFit
+              }
+              className={
+                googleFitStatus ===
+                "connected"
+                  ? "mt-6 w-full rounded-xl bg-emerald-500 px-4 py-3 text-sm font-bold text-black transition hover:bg-emerald-400"
+                  : "mt-6 w-full rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-400 transition hover:bg-emerald-500/20"
+              }
+            >
+
+              {googleFitStatus ===
+              "connected"
+                ? "View Google Fit"
+                : "Connect Google Fit"}
+
+            </button>
+
+          </div>
+
         </div>
 
         <section className="mt-8 rounded-3xl border border-white/10 bg-white/[0.025] p-6">
@@ -575,15 +708,14 @@ export default function DevicesPage() {
             <div>
 
               <h2 className="font-semibold">
-                Samsung Health connection
+                Health integrations
               </h2>
 
               <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
-                Once Samsung Health has authorized
-                Hybrid Human, the connection status
-                will update automatically and synced
-                health data becomes available to your
-                Hybrid Human account.
+                Connect your supported health
+                platforms to Hybrid Human so
+                activity and health data can be
+                synced to your account.
               </p>
 
             </div>
@@ -660,6 +792,9 @@ function StandardDeviceCard({
         {status ===
         "pending"
           ? "Integration Pending"
+          : status ===
+            "connected"
+          ? "Connected"
           : buttonLabel}
       </button>
 

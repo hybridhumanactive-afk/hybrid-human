@@ -7,7 +7,6 @@ import {
 
 import {
   useRouter,
-  useSearchParams,
 } from "next/navigation";
 
 import {
@@ -26,9 +25,6 @@ export default function GoogleFitPage() {
   const router =
     useRouter();
 
-  const searchParams =
-    useSearchParams();
-
   const [
     status,
     setStatus,
@@ -44,15 +40,16 @@ export default function GoogleFitPage() {
     useState("");
 
   useEffect(() => {
-    const oauth =
-      searchParams.get(
-        "oauth"
+    const params =
+      new URLSearchParams(
+        window.location.search
       );
 
+    const oauth =
+      params.get("oauth");
+
     const error =
-      searchParams.get(
-        "error"
-      );
+      params.get("error");
 
     if (
       oauth === "success"
@@ -117,11 +114,22 @@ export default function GoogleFitPage() {
         return;
       }
 
+      if (
+        error ===
+        "callback_failed"
+      ) {
+        setMessage(
+          "Google Fit callback failed."
+        );
+
+        return;
+      }
+
       setMessage(
         `Google Fit authorization failed: ${error}`
       );
     }
-  }, [searchParams]);
+  }, []);
 
   function connectGoogleFit() {
     setStatus(
@@ -132,8 +140,9 @@ export default function GoogleFitPage() {
       "Opening Google authorization..."
     );
 
-    window.location.href =
-      "/api/google-fit/connect";
+    window.location.assign(
+      "/api/google-fit/connect"
+    );
   }
 
   return (
@@ -172,9 +181,8 @@ export default function GoogleFitPage() {
               </h1>
 
               <p className="mt-3 max-w-xl text-slate-500">
-                Authorize Hybrid Human to access
-                your Google Fit activity and
-                health information.
+                Connect your Google Fit account
+                to Hybrid Human.
               </p>
 
             </div>
@@ -190,12 +198,12 @@ export default function GoogleFitPage() {
           <div className="mt-8 rounded-2xl border border-white/10 bg-black/10 p-6">
 
             <h2 className="font-semibold">
-              Google Fit permissions
+              Requested permissions
             </h2>
 
             <p className="mt-2 text-sm leading-6 text-slate-500">
-              Hybrid Human will request read
-              access to your fitness information.
+              Hybrid Human will request read-only
+              access to your Google Fit data.
             </p>
 
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
@@ -253,20 +261,9 @@ export default function GoogleFitPage() {
                     size={22}
                   />
 
-                  Google Fit authorization
-                  succeeded.
+                  Google Fit authorization succeeded.
 
                 </div>
-
-                <button
-                  type="button"
-                  onClick={
-                    connectGoogleFit
-                  }
-                  className="w-full rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-5 py-3 font-semibold text-emerald-400 transition hover:bg-emerald-500/20"
-                >
-                  Authorize Again
-                </button>
 
                 <button
                   type="button"
@@ -278,6 +275,16 @@ export default function GoogleFitPage() {
                   className="w-full rounded-xl bg-emerald-500 px-5 py-3 font-bold text-black transition hover:bg-emerald-400"
                 >
                   Return to Devices
+                </button>
+
+                <button
+                  type="button"
+                  onClick={
+                    connectGoogleFit
+                  }
+                  className="w-full rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-5 py-3 font-semibold text-emerald-400 transition hover:bg-emerald-500/20"
+                >
+                  Authorize Again
                 </button>
 
               </div>

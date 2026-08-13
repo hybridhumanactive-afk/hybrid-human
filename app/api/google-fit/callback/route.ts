@@ -1,42 +1,72 @@
-import { NextResponse } from "next/server";
+import {
+  NextRequest,
+  NextResponse,
+} from "next/server";
 
-export async function GET(request: Request) {
-  const url = new URL(request.url);
+import {
+  FieldValue,
+} from "firebase-admin/firestore";
 
-  const code = url.searchParams.get("code");
-  const state = url.searchParams.get("state");
-  const oauthError = url.searchParams.get("error");
+import {
+  adminDb,
+} from "@/lib/firebase-admin";
 
-  const cookieHeader =
-    request.headers.get("cookie") || "";
+type GoogleTokenResponse = {
+  access_token?: string;
+  refresh_token?: string;
+  expires_in?: number;
+  scope?: string;
+  token_type?: string;
+  id_token?: string;
+  error?: string;
+  error_description?: string;
+};
 
-  const stateCookie = cookieHeader
-    .split(";")
-    .map((cookie) => cookie.trim())
-    .find((cookie) =>
-      cookie.startsWith(
-        "google_fit_oauth_state="
-      )
+export async function GET(
+  request: NextRequest
+) {
+  const url =
+    new URL(
+      request.url
     );
 
-  const savedState = stateCookie
-    ? decodeURIComponent(
-        stateCookie
-          .split("=")
-          .slice(1)
-          .join("=")
-      )
-    : null;
+  const code =
+    url.searchParams.get(
+      "code"
+    );
 
-  const siteOrigin = url.origin;
+  const returnedState =
+    url.searchParams.get(
+      "state"
+    );
+
+  const oauthError =
+    url.searchParams.get(
+      "error"
+    );
+
+  const savedState =
+    request.cookies.get(
+      "google_fit_oauth_state"
+    )?.value;
+
+  const uid =
+    request.cookies.get(
+      "google_fit_uid"
+    )?.value;
+
+  const appUrl =
+    process.env.APP_URL ||
+    "https://thunderous-nasturtium-ff7bdd.netlify.app";
 
   const redirectUri =
-    process.env.GOOGLE_FIT_REDIRECT_URI ||
-    `${siteOrigin}/api/google-fit/callback`;
+    process.env
+      .GOOGLE_FIT_REDIRECT_URI ||
+    `${appUrl}/api/google-fit/callback`;
 
   if (oauthError) {
     return NextResponse.redirect(
-      `${siteOrigin}/integrations/google-fit?error=${encodeURIComponent(
+      `${appUrl}/integrations/google-fit?error=${encodeURIComponent(
         oauthError
       )}`
     );
@@ -44,34 +74,43 @@ export async function GET(request: Request) {
 
   if (!code) {
     return NextResponse.redirect(
-      `${siteOrigin}/integrations/google-fit?error=no_code`
+      `${appUrl}/integrations/google-fit?error=no_code`
     );
   }
 
   if (
-    !state ||
+    !returnedState ||
     !savedState ||
-    state !== savedState
+    returnedState !==
+      savedState
   ) {
     return NextResponse.redirect(
-      `${siteOrigin}/integrations/google-fit?error=invalid_state`
+      `${appUrl}/integrations/google-fit?error=invalid_state`
+    );
+  }
+
+  if (!uid) {
+    return NextResponse.redirect(
+      `${appUrl}/integrations/google-fit?error=missing_user`
     );
   }
 
   const clientId =
-    process.env.GOOGLE_FIT_CLIENT_ID ||
+    process.env
+      .GOOGLE_FIT_CLIENT_ID ||
     process.env
       .NEXT_PUBLIC_GOOGLE_FIT_CLIENT_ID;
 
   const clientSecret =
-    process.env.GOOGLE_FIT_CLIENT_SECRET;
+    process.env
+      .GOOGLE_FIT_CLIENT_SECRET;
 
   if (
     !clientId ||
     !clientSecret
   ) {
     return NextResponse.redirect(
-      `${siteOrigin}/integrations/google-fit?error=missing_server_credentials`
+      `${appUrl}/integrations/google-fit?error=missing_server_credentials`
     );
   }
 
@@ -106,44 +145,135 @@ export async function GET(request: Request) {
       );
 
     const tokens =
-      await tokenResponse.json();
+      (await tokenResponse.json()) as GoogleTokenResponse;
 
-    if (!tokenResponse.ok) {
+    if (
+      !tokenResponse.ok ||
+      !tokens.access_token
+    ) {
       console.error(
         "Google token exchange failed:",
         tokens
       );
 
       return NextResponse.redirect(
-        `${siteOrigin}/integrations/google-fit?error=token_exchange_failed`
+        `${appUrl}/integrations/google-fit?error=token_exchange_failed`
       );
     }
 
-    console.log(
-      "Google Fit OAuth successful."
+    const privateConnectionRef =
+      adminDb
+        .collection(
+          "googleFitConnections"
+        )
+        .doc(
+          uid
+        );
+
+    const previousConnection =
+      await privateConnectionRef.get();
+
+    const previousData =
+      previousConnection.exists
+        ? previousConnection.data()
+        : undefined;
+
+    const refreshToken =
+      tokens.refresh_token ||
+      previousData
+        ?.refreshToken ||
+      null;
+
+    const expiresIn =
+      tokens.expires_in ??
+      3600;
+
+    const expiresAt =
+      Date.now() +
+      expiresIn * 1000;
+
+    await privateConnectionRef.set(
+      {
+        uid,
+
+        provider:
+          "google_fit",
+
+        accessToken:
+          tokens.access_token,
+
+        refreshToken,
+
+        tokenType:
+          tokens.token_type ??
+          "Bearer",
+
+        scope:
+          tokens.scope ??
+          "",
+
+        expiresIn,
+
+        expiresAt,
+
+        connectedAt:
+          previousData
+            ?.connectedAt ??
+          FieldValue.serverTimestamp(),
+
+        updatedAt:
+          FieldValue.serverTimestamp(),
+      },
+      {
+        merge: true,
+      }
     );
 
-    console.log(
-      "Access token received:",
-      Boolean(
-        tokens.access_token
-      )
-    );
+    const publicConnectionRef =
+      adminDb
+        .collection(
+          "users"
+        )
+        .doc(
+          uid
+        )
+        .collection(
+          "deviceConnections"
+        )
+        .doc(
+          "google_fit"
+        );
 
-    console.log(
-      "Refresh token received:",
-      Boolean(
-        tokens.refresh_token
-      )
+    await publicConnectionRef.set(
+      {
+        provider:
+          "google_fit",
+
+        status:
+          "connected",
+
+        connectedAt:
+          FieldValue.serverTimestamp(),
+
+        updatedAt:
+          FieldValue.serverTimestamp(),
+      },
+      {
+        merge: true,
+      }
     );
 
     const response =
       NextResponse.redirect(
-        `${siteOrigin}/integrations/google-fit?oauth=success`
+        `${appUrl}/integrations/google-fit?oauth=success`
       );
 
     response.cookies.delete(
       "google_fit_oauth_state"
+    );
+
+    response.cookies.delete(
+      "google_fit_uid"
     );
 
     return response;
@@ -154,7 +284,7 @@ export async function GET(request: Request) {
     );
 
     return NextResponse.redirect(
-      `${siteOrigin}/integrations/google-fit?error=callback_failed`
+      `${appUrl}/integrations/google-fit?error=callback_failed`
     );
   }
 }

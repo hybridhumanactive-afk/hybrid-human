@@ -10,15 +10,30 @@ import {
 } from "next/navigation";
 
 import {
+  onAuthStateChanged,
+} from "firebase/auth";
+
+import {
+  doc,
+  getDoc,
+} from "firebase/firestore";
+
+import {
   ArrowLeft,
   CheckCircle2,
   Loader2,
 } from "lucide-react";
 
+import {
+  auth,
+  db,
+} from "@/lib/firebase";
+
 type ConnectionStatus =
+  | "loading"
   | "not_connected"
   | "connecting"
-  | "authorized"
+  | "connected"
   | "error";
 
 export default function GoogleFitPage() {
@@ -30,7 +45,7 @@ export default function GoogleFitPage() {
     setStatus,
   ] =
     useState<ConnectionStatus>(
-      "not_connected"
+      "loading"
     );
 
   const [
@@ -40,98 +55,176 @@ export default function GoogleFitPage() {
     useState("");
 
   useEffect(() => {
-    const params =
-      new URLSearchParams(
-        window.location.search
+    const unsubscribe =
+      onAuthStateChanged(
+        auth,
+        async (user) => {
+          if (!user) {
+            router.replace(
+              "/login"
+            );
+
+            return;
+          }
+
+          const params =
+            new URLSearchParams(
+              window.location.search
+            );
+
+          const oauth =
+            params.get(
+              "oauth"
+            );
+
+          const error =
+            params.get(
+              "error"
+            );
+
+          if (error) {
+            setStatus(
+              "error"
+            );
+
+            if (
+              error ===
+              "access_denied"
+            ) {
+              setMessage(
+                "Google Fit permission was denied."
+              );
+
+              return;
+            }
+
+            if (
+              error ===
+              "invalid_state"
+            ) {
+              setMessage(
+                "Google Fit authorization could not be verified. Please try again."
+              );
+
+              return;
+            }
+
+            if (
+              error ===
+              "missing_user"
+            ) {
+              setMessage(
+                "Your Hybrid Human account could not be identified. Please sign in again."
+              );
+
+              return;
+            }
+
+            if (
+              error ===
+              "token_exchange_failed"
+            ) {
+              setMessage(
+                "Google authorization succeeded, but Hybrid Human could not complete the token exchange."
+              );
+
+              return;
+            }
+
+            if (
+              error ===
+              "missing_server_credentials"
+            ) {
+              setMessage(
+                "Google Fit server credentials are missing."
+              );
+
+              return;
+            }
+
+            setMessage(
+              `Google Fit authorization failed: ${error}`
+            );
+
+            return;
+          }
+
+          try {
+            const connectionRef =
+              doc(
+                db,
+                "users",
+                user.uid,
+                "deviceConnections",
+                "google_fit"
+              );
+
+            const connectionSnap =
+              await getDoc(
+                connectionRef
+              );
+
+            if (
+              connectionSnap.exists() &&
+              connectionSnap.data()
+                .status ===
+                "connected"
+            ) {
+              setStatus(
+                "connected"
+              );
+
+              if (
+                oauth ===
+                "success"
+              ) {
+                setMessage(
+                  "Google Fit connected successfully to your Hybrid Human account."
+                );
+              } else {
+                setMessage(
+                  "Google Fit is connected to your Hybrid Human account."
+                );
+              }
+            } else {
+              setStatus(
+                "not_connected"
+              );
+            }
+          } catch (error) {
+            console.error(
+              "Google Fit status error:",
+              error
+            );
+
+            setStatus(
+              "error"
+            );
+
+            setMessage(
+              "Could not check your Google Fit connection."
+            );
+          }
+        }
       );
 
-    const oauth =
-      params.get("oauth");
+    return () => {
+      unsubscribe();
+    };
+  }, [router]);
 
-    const error =
-      params.get("error");
+  async function connectGoogleFit() {
+    const user =
+      auth.currentUser;
 
-    if (
-      oauth === "success"
-    ) {
-      setStatus(
-        "authorized"
-      );
-
-      setMessage(
-        "Google Fit authorization completed successfully."
+    if (!user) {
+      router.push(
+        "/login"
       );
 
       return;
     }
 
-    if (error) {
-      setStatus(
-        "error"
-      );
-
-      if (
-        error ===
-        "access_denied"
-      ) {
-        setMessage(
-          "Google Fit permission was denied."
-        );
-
-        return;
-      }
-
-      if (
-        error ===
-        "invalid_state"
-      ) {
-        setMessage(
-          "Google Fit authorization could not be verified. Please try again."
-        );
-
-        return;
-      }
-
-      if (
-        error ===
-        "token_exchange_failed"
-      ) {
-        setMessage(
-          "Google authorization succeeded, but Hybrid Human could not exchange the authorization code."
-        );
-
-        return;
-      }
-
-      if (
-        error ===
-        "missing_server_credentials"
-      ) {
-        setMessage(
-          "Google Fit server credentials are missing."
-        );
-
-        return;
-      }
-
-      if (
-        error ===
-        "callback_failed"
-      ) {
-        setMessage(
-          "Google Fit callback failed."
-        );
-
-        return;
-      }
-
-      setMessage(
-        `Google Fit authorization failed: ${error}`
-      );
-    }
-  }, []);
-
-  function connectGoogleFit() {
     setStatus(
       "connecting"
     );
@@ -140,8 +233,75 @@ export default function GoogleFitPage() {
       "Opening Google authorization..."
     );
 
-    window.location.assign(
-      "/api/google-fit/connect"
+    try {
+      const idToken =
+        await user.getIdToken(
+          true
+        );
+
+      const response =
+        await fetch(
+          "/api/google-fit/connect",
+          {
+            method:
+              "POST",
+
+            headers: {
+              Authorization:
+                `Bearer ${idToken}`,
+            },
+          }
+        );
+
+      const data =
+        await response.json();
+
+      if (
+        !response.ok ||
+        !data.authorizationUrl
+      ) {
+        throw new Error(
+          data.error ||
+            "Could not start Google Fit authorization."
+        );
+      }
+
+      window.location.assign(
+        data.authorizationUrl
+      );
+    } catch (error) {
+      console.error(
+        "Google Fit connection error:",
+        error
+      );
+
+      setStatus(
+        "error"
+      );
+
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Could not connect Google Fit."
+      );
+    }
+  }
+
+  if (
+    status ===
+    "loading"
+  ) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#06100c] text-slate-400">
+
+        <Loader2
+          className="mr-3 animate-spin"
+          size={22}
+        />
+
+        Loading Google Fit...
+
+      </main>
     );
   }
 
@@ -159,11 +319,13 @@ export default function GoogleFitPage() {
           }
           className="mb-8 flex items-center gap-2 text-sm text-slate-400 transition hover:text-white"
         >
+
           <ArrowLeft
             size={17}
           />
 
           Connected Devices
+
         </button>
 
         <section className="rounded-3xl border border-white/10 bg-white/[0.025] p-8">
@@ -181,8 +343,8 @@ export default function GoogleFitPage() {
               </h1>
 
               <p className="mt-3 max-w-xl text-slate-500">
-                Connect your Google Fit account
-                to Hybrid Human.
+                Connect your Google Fit
+                account to Hybrid Human.
               </p>
 
             </div>
@@ -202,8 +364,9 @@ export default function GoogleFitPage() {
             </h2>
 
             <p className="mt-2 text-sm leading-6 text-slate-500">
-              Hybrid Human will request read-only
-              access to your Google Fit data.
+              Hybrid Human requests
+              read-only access to your
+              Google Fit data.
             </p>
 
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
@@ -252,7 +415,7 @@ export default function GoogleFitPage() {
           <div className="mt-8">
 
             {status ===
-            "authorized" ? (
+            "connected" ? (
               <div className="space-y-4">
 
                 <div className="flex items-center gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-5 text-emerald-300">
@@ -261,7 +424,8 @@ export default function GoogleFitPage() {
                     size={22}
                   />
 
-                  Google Fit authorization succeeded.
+                  Google Fit is connected
+                  to Hybrid Human.
 
                 </div>
 
@@ -284,7 +448,7 @@ export default function GoogleFitPage() {
                   }
                   className="w-full rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-5 py-3 font-semibold text-emerald-400 transition hover:bg-emerald-500/20"
                 >
-                  Authorize Again
+                  Re-authorize Google Fit
                 </button>
 
               </div>
@@ -355,7 +519,7 @@ function StatusBadge({
 }) {
   if (
     status ===
-    "authorized"
+    "connected"
   ) {
     return (
       <div className="flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-400">
@@ -364,7 +528,7 @@ function StatusBadge({
           size={15}
         />
 
-        Authorized
+        Connected
 
       </div>
     );

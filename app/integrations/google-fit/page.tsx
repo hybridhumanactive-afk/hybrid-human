@@ -38,6 +38,14 @@ type ConnectionStatus =
   | "syncing"
   | "error";
 
+type GoogleFitDailyData = {
+  steps?: number;
+  distanceKm?: number;
+  heartRateAverage?: number | null;
+  heartRateMin?: number | null;
+  heartRateMax?: number | null;
+};
+
 export default function GoogleFitPage() {
   const router =
     useRouter();
@@ -57,12 +65,16 @@ export default function GoogleFitPage() {
     useState("");
 
   const [
-    steps,
-    setSteps,
+    fitData,
+    setFitData,
   ] =
-    useState<number | null>(
-      null
-    );
+    useState<GoogleFitDailyData>({
+      steps: undefined,
+      distanceKm: undefined,
+      heartRateAverage: null,
+      heartRateMin: null,
+      heartRateMax: null,
+    });
 
   useEffect(() => {
     const unsubscribe =
@@ -197,7 +209,7 @@ export default function GoogleFitPage() {
                 );
               }
 
-              await loadStoredSteps(
+              await loadStoredGoogleFitData(
                 user.uid
               );
             } else {
@@ -227,7 +239,7 @@ export default function GoogleFitPage() {
     };
   }, [router]);
 
-  async function loadStoredSteps(
+  async function loadStoredGoogleFitData(
     uid: string
   ) {
     try {
@@ -259,22 +271,44 @@ export default function GoogleFitPage() {
       if (
         healthSnap.exists()
       ) {
-        const storedSteps =
-          healthSnap.data()
-            .steps;
+        const data =
+          healthSnap.data();
 
-        if (
-          typeof storedSteps ===
-          "number"
-        ) {
-          setSteps(
-            storedSteps
-          );
-        }
+        setFitData({
+          steps:
+            typeof data.steps ===
+            "number"
+              ? data.steps
+              : undefined,
+
+          distanceKm:
+            typeof data.distanceKm ===
+            "number"
+              ? data.distanceKm
+              : undefined,
+
+          heartRateAverage:
+            typeof data.heartRateAverage ===
+            "number"
+              ? data.heartRateAverage
+              : null,
+
+          heartRateMin:
+            typeof data.heartRateMin ===
+            "number"
+              ? data.heartRateMin
+              : null,
+
+          heartRateMax:
+            typeof data.heartRateMax ===
+            "number"
+              ? data.heartRateMax
+              : null,
+        });
       }
     } catch (error) {
       console.error(
-        "Could not load stored Google Fit steps:",
+        "Could not load stored Google Fit data:",
         error
       );
     }
@@ -426,7 +460,10 @@ export default function GoogleFitPage() {
       let data: {
         success?: boolean;
         steps?: number;
-        date?: string;
+        distanceKm?: number;
+        heartRateAverage?: number | null;
+        heartRateMin?: number | null;
+        heartRateMax?: number | null;
         error?: string;
       } = {};
 
@@ -453,23 +490,32 @@ export default function GoogleFitPage() {
         );
       }
 
-      if (
-        typeof data.steps ===
-        "number"
-      ) {
-        setSteps(
-          data.steps
-        );
-      }
+      setFitData({
+        steps:
+          data.steps ?? 0,
+
+        distanceKm:
+          data.distanceKm ?? 0,
+
+        heartRateAverage:
+          data.heartRateAverage ??
+          null,
+
+        heartRateMin:
+          data.heartRateMin ??
+          null,
+
+        heartRateMax:
+          data.heartRateMax ??
+          null,
+      });
 
       setStatus(
         "connected"
       );
 
       setMessage(
-        `Google Fit synced successfully. Today's steps: ${(
-          data.steps ?? 0
-        ).toLocaleString()}.`
+        "Google Fit synced successfully."
       );
     } catch (error) {
       console.error(
@@ -516,7 +562,7 @@ export default function GoogleFitPage() {
   return (
     <main className="min-h-screen bg-[#06100c] px-5 py-8 text-white">
 
-      <div className="mx-auto max-w-4xl">
+      <div className="mx-auto max-w-5xl">
 
         <button
           type="button"
@@ -609,17 +655,63 @@ export default function GoogleFitPage() {
           </div>
 
           {isConnected && (
-            <div className="mt-6 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-6">
+            <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
 
-              <p className="text-sm text-slate-400">
-                Today's Google Fit steps
-              </p>
+              <MetricCard
+                label="Steps"
+                value={
+                  fitData.steps ===
+                  undefined
+                    ? "--"
+                    : fitData.steps.toLocaleString()
+                }
+              />
 
-              <p className="mt-2 text-4xl font-bold text-emerald-400">
-                {steps === null
-                  ? "--"
-                  : steps.toLocaleString()}
-              </p>
+              <MetricCard
+                label="Distance"
+                value={
+                  fitData.distanceKm ===
+                  undefined
+                    ? "--"
+                    : `${fitData.distanceKm.toFixed(
+                        2
+                      )} km`
+                }
+              />
+
+              <MetricCard
+                label="Average HR"
+                value={
+                  fitData.heartRateAverage ===
+                  null ||
+                  fitData.heartRateAverage ===
+                  undefined
+                    ? "--"
+                    : `${Math.round(
+                        fitData.heartRateAverage
+                      )} bpm`
+                }
+              />
+
+              <MetricCard
+                label="Heart rate range"
+                value={
+                  fitData.heartRateMin ===
+                    null ||
+                  fitData.heartRateMin ===
+                    undefined ||
+                  fitData.heartRateMax ===
+                    null ||
+                  fitData.heartRateMax ===
+                    undefined
+                    ? "--"
+                    : `${Math.round(
+                        fitData.heartRateMin
+                      )}–${Math.round(
+                        fitData.heartRateMax
+                      )} bpm`
+                }
+              />
 
             </div>
           )}
@@ -737,6 +829,28 @@ export default function GoogleFitPage() {
       </div>
 
     </main>
+  );
+}
+
+function MetricCard({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-5">
+
+      <p className="text-sm text-slate-400">
+        {label}
+      </p>
+
+      <p className="mt-2 text-2xl font-bold text-emerald-400">
+        {value}
+      </p>
+
+    </div>
   );
 }
 

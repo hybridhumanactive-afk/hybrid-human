@@ -27,6 +27,28 @@ type GoogleTokenResponse = {
   error_description?: string;
 };
 
+type FitValue = {
+  intVal?: number;
+  fpVal?: number;
+};
+
+type FitPoint = {
+  value?: FitValue[];
+};
+
+type FitDataset = {
+  dataSourceId?: string;
+  point?: FitPoint[];
+};
+
+type FitBucket = {
+  dataset?: FitDataset[];
+};
+
+type AggregateResponse = {
+  bucket?: FitBucket[];
+};
+
 async function refreshAccessToken(
   refreshToken: string
 ) {
@@ -117,9 +139,7 @@ async function getValidAccessToken(
   const connectionSnap =
     await connectionRef.get();
 
-  if (
-    !connectionSnap.exists
-  ) {
+  if (!connectionSnap.exists) {
     throw new Error(
       "Google Fit is not connected."
     );
@@ -142,9 +162,7 @@ async function getValidAccessToken(
     return connection.accessToken;
   }
 
-  if (
-    !connection.refreshToken
-  ) {
+  if (!connection.refreshToken) {
     throw new Error(
       "Google Fit authorization has expired. Please reconnect Google Fit."
     );
@@ -157,8 +175,7 @@ async function getValidAccessToken(
 
   const newExpiresAt =
     Date.now() +
-    refreshed.expiresIn *
-      1000;
+    refreshed.expiresIn * 1000;
 
   await connectionRef.set(
     {
@@ -182,7 +199,7 @@ async function getValidAccessToken(
   return refreshed.accessToken;
 }
 
-async function getTodaySteps(
+async function getTodayGoogleFitData(
   accessToken: string
 ) {
   const now =
@@ -219,6 +236,16 @@ async function getTodaySteps(
                 dataTypeName:
                   "com.google.step_count.delta",
               },
+
+              {
+                dataTypeName:
+                  "com.google.distance.delta",
+              },
+
+              {
+                dataTypeName:
+                  "com.google.heart_rate.summary",
+              },
             ],
 
             bucketByTime: {
@@ -240,23 +267,36 @@ async function getTodaySteps(
     );
 
   const data =
-    await response.json();
+    (await response.json()) as AggregateResponse;
 
-  if (
-    !response.ok
-  ) {
+  if (!response.ok) {
     console.error(
       "Google Fit aggregate error:",
       data
     );
 
     throw new Error(
-      "Could not read Google Fit steps."
+      "Could not read Google Fit data."
     );
   }
 
   let steps =
     0;
+
+  let distanceMeters =
+    0;
+
+  let heartRateAverage:
+    number | null =
+    null;
+
+  let heartRateMin:
+    number | null =
+    null;
+
+  let heartRateMax:
+    number | null =
+    null;
 
   const buckets =
     Array.isArray(
@@ -280,6 +320,10 @@ async function getTodaySteps(
       const dataset
       of datasets
     ) {
+      const sourceId =
+        dataset.dataSourceId ??
+        "";
+
       const points =
         Array.isArray(
           dataset.point
@@ -287,34 +331,131 @@ async function getTodaySteps(
           ? dataset.point
           : [];
 
-      for (
-        const point
-        of points
+      if (
+        sourceId.includes(
+          "step_count"
+        )
       ) {
-        const values =
-          Array.isArray(
-            point.value
-          )
-            ? point.value
-            : [];
-
         for (
-          const value
-          of values
+          const point
+          of points
         ) {
-          if (
-            typeof value.intVal ===
-            "number"
+          const values =
+            point.value ?? [];
+
+          for (
+            const value
+            of values
           ) {
-            steps +=
-              value.intVal;
+            if (
+              typeof value.intVal ===
+              "number"
+            ) {
+              steps +=
+                value.intVal;
+            }
+          }
+        }
+      }
+
+      if (
+        sourceId.includes(
+          "distance"
+        )
+      ) {
+        for (
+          const point
+          of points
+        ) {
+          const values =
+            point.value ?? [];
+
+          for (
+            const value
+            of values
+          ) {
+            if (
+              typeof value.fpVal ===
+              "number"
+            ) {
+              distanceMeters +=
+                value.fpVal;
+            }
+          }
+        }
+      }
+
+      if (
+        sourceId.includes(
+          "heart_rate"
+        )
+      ) {
+        for (
+          const point
+          of points
+        ) {
+          const values =
+            point.value ?? [];
+
+          if (
+            values.length >= 3
+          ) {
+            const average =
+              values[0]
+                ?.fpVal;
+
+            const max =
+              values[1]
+                ?.fpVal;
+
+            const min =
+              values[2]
+                ?.fpVal;
+
+            if (
+              typeof average ===
+              "number"
+            ) {
+              heartRateAverage =
+                average;
+            }
+
+            if (
+              typeof max ===
+              "number"
+            ) {
+              heartRateMax =
+                max;
+            }
+
+            if (
+              typeof min ===
+              "number"
+            ) {
+              heartRateMin =
+                min;
+            }
           }
         }
       }
     }
   }
 
-  return steps;
+  return {
+    steps,
+
+    distanceMeters,
+
+    distanceKm:
+      distanceMeters /
+      1000,
+
+    heartRateAverage,
+
+    heartRateMin,
+
+    heartRateMax,
+  };
 }
 
 export async function POST(
@@ -361,8 +502,8 @@ export async function POST(
         uid
       );
 
-    const steps =
-      await getTodaySteps(
+    const fitData =
+      await getTodayGoogleFitData(
         accessToken
       );
 
@@ -402,7 +543,23 @@ export async function POST(
         provider:
           "google_fit",
 
-        steps,
+        steps:
+          fitData.steps,
+
+        distanceMeters:
+          fitData.distanceMeters,
+
+        distanceKm:
+          fitData.distanceKm,
+
+        heartRateAverage:
+          fitData.heartRateAverage,
+
+        heartRateMin:
+          fitData.heartRateMin,
+
+        heartRateMax:
+          fitData.heartRateMax,
 
         syncedAt:
           FieldValue.serverTimestamp(),
@@ -436,10 +593,26 @@ export async function POST(
       success:
         true,
 
-      steps,
-
       date:
         dateId,
+
+      steps:
+        fitData.steps,
+
+      distanceMeters:
+        fitData.distanceMeters,
+
+      distanceKm:
+        fitData.distanceKm,
+
+      heartRateAverage:
+        fitData.heartRateAverage,
+
+      heartRateMin:
+        fitData.heartRateMin,
+
+      heartRateMax:
+        fitData.heartRateMax,
     });
   } catch (error) {
     console.error(

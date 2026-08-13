@@ -244,7 +244,7 @@ async function getTodayGoogleFitData(
 
               {
                 dataTypeName:
-                  "com.google.heart_rate.summary",
+                  "com.google.heart_rate.bpm",
               },
             ],
 

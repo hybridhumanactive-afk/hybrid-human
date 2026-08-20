@@ -46,6 +46,13 @@ import {
   db,
 } from "@/lib/firebase";
 
+import {
+  getCurrentWeekKey,
+  syncLeaderboard,
+  type LeaderboardSyncResult,
+} from "@/lib/leaderboard";
+
+
 type UserProfile = {
   uid: string;
   email: string;
@@ -219,6 +226,22 @@ export default function DashboardPage() {
       false
     );
 
+  const [
+    leaderboardSummary,
+    setLeaderboardSummary,
+  ] =
+    useState<LeaderboardSyncResult | null>(
+      null
+    );
+
+  const [
+    weeklyRank,
+    setWeeklyRank,
+  ] =
+    useState<number | null>(
+      null
+    );
+
   useEffect(() => {
     const unsubscribe =
       onAuthStateChanged(
@@ -344,6 +367,8 @@ export default function DashboardPage() {
               workoutData
             );
 
+            await syncGoogleFit();
+
             await loadGoogleFitData(
               user.uid
             );
@@ -363,6 +388,179 @@ export default function DashboardPage() {
     return () =>
       unsubscribe();
   }, [router]);
+
+  async function syncGoogleFit() {
+    const user =
+      auth.currentUser;
+
+    if (!user) {
+      return false;
+    }
+
+    try {
+      const idToken =
+        await user.getIdToken(
+          true
+        );
+
+      const response =
+        await fetch(
+          "/api/google-fit/sync",
+          {
+            method: "POST",
+
+            headers: {
+              Authorization:
+                `Bearer ${idToken}`,
+
+              "Content-Type":
+                "application/json",
+            },
+
+            cache:
+              "no-store",
+          }
+        );
+
+      const responseText =
+        await response.text();
+
+      let data: {
+        success?: boolean;
+        error?: string;
+      } = {};
+
+      if (responseText) {
+        try {
+          data =
+            JSON.parse(
+              responseText
+            );
+        } catch {
+          console.error(
+            "Google Fit automatic sync returned invalid JSON."
+          );
+
+          return false;
+        }
+      }
+
+      if (
+        !response.ok ||
+        !data.success
+      ) {
+        console.log(
+          "Google Fit automatic sync skipped:",
+          data.error ||
+            `HTTP ${response.status}`
+        );
+
+        return false;
+      }
+
+      console.log(
+        "Google Fit automatically synced."
+      );
+
+      const leaderboard =
+        await syncLeaderboard(
+          user.uid
+        );
+
+      setLeaderboardSummary(
+        leaderboard
+      );
+
+      await loadWeeklyRank(
+        user.uid
+      );
+
+      return true;
+    } catch (error) {
+      console.error(
+        "Google Fit automatic sync failed:",
+        error
+      );
+
+      return false;
+    }
+  }
+
+  async function loadWeeklyRank(
+    uid: string
+  ) {
+    try {
+      const leaderboardReference =
+        collection(
+          db,
+          "leaderboardEntries"
+        );
+
+      const snapshot =
+        await getDocs(
+          leaderboardReference
+        );
+
+      const currentWeekKey =
+        getCurrentWeekKey();
+
+      const currentEntries =
+        snapshot.docs
+          .map(
+            (leaderboardDocument) => {
+              const data =
+                leaderboardDocument.data();
+
+              return {
+                uid:
+                  data.uid ||
+                  leaderboardDocument.id,
+
+                weeklyPoints:
+                  Number(
+                    data.weeklyPoints ||
+                      0
+                  ),
+
+                weekKey:
+                  data.weekKey ||
+                  "",
+              };
+            }
+          )
+          .filter(
+            (entry) =>
+              entry.weekKey ===
+              currentWeekKey
+          )
+          .sort(
+            (a, b) =>
+              b.weeklyPoints -
+              a.weeklyPoints
+          );
+
+      const index =
+        currentEntries.findIndex(
+          (entry) =>
+            entry.uid === uid
+        );
+
+      setWeeklyRank(
+        index >= 0
+          ? index + 1
+          : null
+      );
+    } catch (error) {
+      console.error(
+        "Weekly rank loading error:",
+        error
+      );
+
+      setWeeklyRank(
+        null
+      );
+    }
+  }
 
   async function loadGoogleFitData(
     uid: string
@@ -486,52 +684,12 @@ export default function DashboardPage() {
   }
 
   const weeklyPoints =
-    useMemo(() => {
-      const weekStart =
-        getStartOfWeekKey();
-
-      return workouts
-        .filter(
-          (
-            workout
-          ) =>
-            workout.date >=
-            weekStart
-        )
-        .reduce(
-          (
-            total,
-            workout
-          ) =>
-            total +
-            workout.points,
-          0
-        );
-    }, [workouts]);
+    leaderboardSummary?.weeklyPoints ??
+    0;
 
   const monthlyPoints =
-    useMemo(() => {
-      const monthStart =
-        getStartOfMonthKey();
-
-      return workouts
-        .filter(
-          (
-            workout
-          ) =>
-            workout.date >=
-            monthStart
-        )
-        .reduce(
-          (
-            total,
-            workout
-          ) =>
-            total +
-            workout.points,
-          0
-        );
-    }, [workouts]);
+    leaderboardSummary?.monthlyPoints ??
+    0;
 
   const weeklyWorkoutCount =
     useMemo(() => {
@@ -609,7 +767,6 @@ export default function DashboardPage() {
 
   return (
     <main className="min-h-screen bg-[#06100c] text-white">
-
       <div className="flex min-h-screen">
 
         <aside className="hidden w-72 flex-col border-r border-white/10 bg-[#08140f] p-6 lg:flex">
@@ -1234,7 +1391,9 @@ export default function DashboardPage() {
                     </span>
 
                     <span>
-                      Not ranked
+                      {weeklyRank !== null
+                        ? `#${weeklyRank}`
+                        : "Not ranked"}
                     </span>
 
                   </div>

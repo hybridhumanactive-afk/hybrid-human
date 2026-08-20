@@ -35,18 +35,6 @@ import {
   db,
 } from "@/lib/firebase";
 
-import {
-  connectSamsungHealth,
-  disconnectSamsungHealth,
-  getDeviceConnection,
-  setDeviceConnectionStatus,
-} from "@/lib/device-connections";
-
-import type {
-  DeviceConnection,
-  DeviceProvider,
-} from "@/lib/integrations";
-
 type GoogleFitStatus =
   | "not_connected"
   | "pending"
@@ -68,30 +56,6 @@ export default function DevicesPage() {
     setRefreshing,
   ] =
     useState(false);
-
-  const [
-    garminConnection,
-    setGarminConnection,
-  ] =
-    useState<DeviceConnection | null>(
-      null
-    );
-
-  const [
-    appleConnection,
-    setAppleConnection,
-  ] =
-    useState<DeviceConnection | null>(
-      null
-    );
-
-  const [
-    samsungConnection,
-    setSamsungConnection,
-  ] =
-    useState<DeviceConnection | null>(
-      null
-    );
 
   const [
     googleFitStatus,
@@ -125,7 +89,9 @@ export default function DevicesPage() {
           reference
         );
 
-      if (!snapshot.exists()) {
+      if (
+        !snapshot.exists()
+      ) {
         setGoogleFitStatus(
           "not_connected"
         );
@@ -157,48 +123,6 @@ export default function DevicesPage() {
     }
   }
 
-  async function loadConnections(
-    userId: string
-  ) {
-    const [
-      garmin,
-      apple,
-      samsung,
-    ] =
-      await Promise.all([
-        getDeviceConnection(
-          userId,
-          "garmin"
-        ),
-
-        getDeviceConnection(
-          userId,
-          "apple"
-        ),
-
-        getDeviceConnection(
-          userId,
-          "samsung"
-        ),
-      ]);
-
-    setGarminConnection(
-      garmin
-    );
-
-    setAppleConnection(
-      apple
-    );
-
-    setSamsungConnection(
-      samsung
-    );
-
-    await loadGoogleFitConnection(
-      userId
-    );
-  }
-
   useEffect(() => {
     const unsubscribe =
       onAuthStateChanged(
@@ -213,7 +137,7 @@ export default function DevicesPage() {
           }
 
           try {
-            await loadConnections(
+            await loadGoogleFitConnection(
               user.uid
             );
           } catch (error) {
@@ -255,8 +179,12 @@ export default function DevicesPage() {
     );
 
     try {
-      await loadConnections(
+      await loadGoogleFitConnection(
         user.uid
+      );
+
+      setMessage(
+        "Device connection status refreshed."
       );
     } catch (error) {
       console.error(
@@ -265,149 +193,11 @@ export default function DevicesPage() {
       );
 
       setMessage(
-        "Could not refresh your device connections."
+        "Could not refresh your device connection."
       );
     } finally {
       setRefreshing(
         false
-      );
-    }
-  }
-
-  async function markPending(
-    provider: DeviceProvider
-  ) {
-    const user =
-      auth.currentUser;
-
-    if (!user) {
-      return;
-    }
-
-    try {
-      await setDeviceConnectionStatus(
-        user.uid,
-        provider,
-        "pending"
-      );
-
-      const connection:
-        DeviceConnection =
-        {
-          provider,
-          status:
-            "pending",
-        };
-
-      if (
-        provider ===
-        "garmin"
-      ) {
-        setGarminConnection(
-          connection
-        );
-
-        setMessage(
-          "Garmin integration is waiting for developer credentials."
-        );
-      }
-
-      if (
-        provider ===
-        "apple"
-      ) {
-        setAppleConnection(
-          connection
-        );
-
-        setMessage(
-          "Apple Health integration is waiting for the HealthKit connection."
-        );
-      }
-    } catch (error) {
-      console.error(
-        "Integration update error:",
-        error
-      );
-
-      setMessage(
-        "Could not update the integration."
-      );
-    }
-  }
-
-  async function handleSamsungConnect() {
-    const user =
-      auth.currentUser;
-
-    if (!user) {
-      return;
-    }
-
-    setMessage(
-      ""
-    );
-
-    try {
-      await connectSamsungHealth(
-        user.uid
-      );
-
-      setSamsungConnection({
-        provider:
-          "samsung",
-
-        status:
-          "pending",
-      });
-
-      setMessage(
-        "Samsung Health connection requested. Open Samsung Health on your linked phone and allow Hybrid Human access, then refresh this page."
-      );
-    } catch (error) {
-      console.error(
-        "Samsung connection error:",
-        error
-      );
-
-      setMessage(
-        "Could not start the Samsung Health connection."
-      );
-    }
-  }
-
-  async function handleSamsungDisconnect() {
-    const user =
-      auth.currentUser;
-
-    if (!user) {
-      return;
-    }
-
-    try {
-      await disconnectSamsungHealth(
-        user.uid
-      );
-
-      setSamsungConnection({
-        provider:
-          "samsung",
-
-        status:
-          "not_connected",
-      });
-
-      setMessage(
-        "Samsung Health has been disconnected from Hybrid Human."
-      );
-    } catch (error) {
-      console.error(
-        "Samsung disconnect error:",
-        error
-      );
-
-      setMessage(
-        "Could not disconnect Samsung Health."
       );
     }
   }
@@ -418,7 +208,9 @@ export default function DevicesPage() {
     );
   }
 
-  if (loading) {
+  if (
+    loading
+  ) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#06100c] text-slate-400">
 
@@ -432,11 +224,6 @@ export default function DevicesPage() {
       </main>
     );
   }
-
-  const samsungStatus =
-    samsungConnection
-      ?.status ??
-    "not_connected";
 
   return (
     <main className="min-h-screen bg-[#06100c] px-5 py-8 text-white">
@@ -500,8 +287,7 @@ export default function DevicesPage() {
           </h1>
 
           <p className="mt-3 max-w-2xl text-slate-500">
-            Connect your health and wearable
-            ecosystem to Hybrid Human.
+            Connect your health and wearable ecosystem to Hybrid Human.
           </p>
 
         </header>
@@ -514,135 +300,37 @@ export default function DevicesPage() {
 
         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
 
-          <StandardDeviceCard
+          <ComingSoonCard
             name="Garmin"
-            description="Import Garmin Connect workouts and health metrics."
+            description="Garmin Connect workout and health data integration."
             icon={
               <Watch
                 size={28}
               />
             }
-            connection={
-              garminConnection
-            }
-            buttonLabel="Prepare Garmin"
-            onClick={() =>
-              markPending(
-                "garmin"
-              )
-            }
           />
 
-          <StandardDeviceCard
+          <ComingSoonCard
             name="Apple Health"
-            description="Import Apple Watch and iPhone health data through HealthKit."
+            description="Apple Watch and iPhone health data integration through HealthKit."
             icon={
               <Smartphone
                 size={28}
               />
             }
-            connection={
-              appleConnection
-            }
-            buttonLabel="Prepare Apple"
-            onClick={() =>
-              markPending(
-                "apple"
-              )
+          />
+
+          <ComingSoonCard
+            name="Samsung Health"
+            description="Samsung Health activity and health metrics integration."
+            icon={
+              <HeartPulse
+                size={28}
+              />
             }
           />
 
-          <div className="rounded-3xl border border-white/10 bg-white/[0.025] p-6">
-
-            <div className="flex items-start justify-between gap-4">
-
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-400">
-
-                <HeartPulse
-                  size={28}
-                />
-
-              </div>
-
-              <StatusBadge
-                status={
-                  samsungStatus
-                }
-              />
-
-            </div>
-
-            <h2 className="mt-6 text-xl font-semibold">
-              Samsung Health
-            </h2>
-
-            <p className="mt-2 min-h-16 text-sm leading-6 text-slate-500">
-              Connect Samsung Health to import
-              workouts and health metrics into
-              Hybrid Human.
-            </p>
-
-            {samsungStatus ===
-            "connected" ? (
-              <div className="mt-6 space-y-3">
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    router.push(
-                      "/integrations/samsung"
-                    )
-                  }
-                  className="w-full rounded-xl bg-emerald-500 px-4 py-3 text-sm font-bold text-black transition hover:bg-emerald-400"
-                >
-                  View Samsung Health
-                </button>
-
-                <button
-                  type="button"
-                  onClick={
-                    handleSamsungDisconnect
-                  }
-                  className="w-full rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm font-semibold text-red-400 transition hover:bg-red-500/10"
-                >
-                  Disconnect
-                </button>
-
-              </div>
-            ) : samsungStatus ===
-              "pending" ? (
-              <div className="mt-6 space-y-3">
-
-                <button
-                  type="button"
-                  onClick={
-                    refreshConnections
-                  }
-                  className="w-full rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm font-semibold text-amber-400 transition hover:bg-amber-500/20"
-                >
-                  Check Connection
-                </button>
-
-                <p className="text-center text-xs text-slate-600">
-                  Waiting for Samsung Health authorization
-                </p>
-
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={
-                  handleSamsungConnect
-                }
-                className="mt-6 w-full rounded-xl bg-emerald-500 px-4 py-3 text-sm font-bold text-black transition hover:bg-emerald-400"
-              >
-                Connect Samsung Health
-              </button>
-            )}
-
-          </div>
-
-          <div className="rounded-3xl border border-white/10 bg-white/[0.025] p-6">
+          <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/[0.04] p-6">
 
             <div className="flex items-start justify-between gap-4">
 
@@ -667,9 +355,7 @@ export default function DevicesPage() {
             </h2>
 
             <p className="mt-2 min-h-16 text-sm leading-6 text-slate-500">
-              Import Google Fit activity,
-              steps, workouts, heart rate,
-              distance and health metrics.
+              Sync steps, distance, workouts, heart rate and activity data into Hybrid Human.
             </p>
 
             <button
@@ -687,7 +373,7 @@ export default function DevicesPage() {
 
               {googleFitStatus ===
               "connected"
-                ? "View Google Fit"
+                ? "Manage Google Fit"
                 : "Connect Google Fit"}
 
             </button>
@@ -708,14 +394,15 @@ export default function DevicesPage() {
             <div>
 
               <h2 className="font-semibold">
-                Health integrations
+                Automatic health sync
               </h2>
 
               <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
-                Connect your supported health
-                platforms to Hybrid Human so
-                activity and health data can be
-                synced to your account.
+                Google Fit is currently the active Hybrid Human health integration. Once connected, your activity data is automatically synchronized when you sign in or refresh the dashboard.
+              </p>
+
+              <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-500">
+                Garmin, Apple Health and Samsung Health support will be added in future releases.
               </p>
 
             </div>
@@ -730,47 +417,33 @@ export default function DevicesPage() {
   );
 }
 
-function StandardDeviceCard({
+function ComingSoonCard({
   name,
   description,
   icon,
-  connection,
-  buttonLabel,
-  onClick,
 }: {
   name: string;
-
   description: string;
-
-  icon:
-    React.ReactNode;
-
-  connection:
-    | DeviceConnection
-    | null;
-
-  buttonLabel: string;
-
-  onClick: () => void;
+  icon: React.ReactNode;
 }) {
-  const status =
-    connection?.status ??
-    "not_connected";
-
   return (
     <div className="rounded-3xl border border-white/10 bg-white/[0.025] p-6">
 
       <div className="flex items-start justify-between gap-4">
 
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-400">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/[0.04] text-slate-500">
           {icon}
         </div>
 
-        <StatusBadge
-          status={
-            status
-          }
-        />
+        <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs font-semibold text-slate-500">
+
+          <Clock3
+            size={13}
+          />
+
+          Coming Soon
+
+        </div>
 
       </div>
 
@@ -784,18 +457,10 @@ function StandardDeviceCard({
 
       <button
         type="button"
-        onClick={
-          onClick
-        }
-        className="mt-6 w-full rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-400 transition hover:bg-emerald-500/20"
+        disabled
+        className="mt-6 w-full cursor-not-allowed rounded-xl border border-white/10 bg-white/[0.025] px-4 py-3 text-sm font-semibold text-slate-600"
       >
-        {status ===
-        "pending"
-          ? "Integration Pending"
-          : status ===
-            "connected"
-          ? "Connected"
-          : buttonLabel}
+        Coming Soon
       </button>
 
     </div>

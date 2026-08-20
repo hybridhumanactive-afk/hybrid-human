@@ -30,8 +30,24 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
+# environment variables / secrets
+.env
+.env.*
+!.env.example
+
+# Firebase / Google service account credentials
+service-account*.json
+firebase-admin*.json
+google-service-account*.json
+*service-account*.json
+
+# local Firebase credential files
+firebase-service-account.json
+firebase-admin-service-account.json
+
+# Google OAuth credential exports
+client_secret*.json
+credentials*.json
 
 # vercel
 .vercel

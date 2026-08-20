@@ -1,10 +1,18 @@
 "use client";
 
-import { FormEvent, useState } from "react";
-import { useRouter } from "next/navigation";
+import {
+  FormEvent,
+  useState,
+} from "react";
+
+import {
+  useRouter,
+} from "next/navigation";
+
 import Link from "next/link";
 
 import {
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signInWithPopup,
 } from "firebase/auth";
@@ -19,25 +27,71 @@ import {
   Trophy,
 } from "lucide-react";
 
-import { auth, googleProvider } from "@/lib/firebase";
+import {
+  auth,
+  googleProvider,
+} from "@/lib/firebase";
 
 export default function LoginPage() {
-  const router = useRouter();
+  const router =
+    useRouter();
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [
+    email,
+    setEmail,
+  ] =
+    useState("");
 
-  const [showPassword, setShowPassword] = useState(false);
+  const [
+    password,
+    setPassword,
+  ] =
+    useState("");
 
-  const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
+  const [
+    showPassword,
+    setShowPassword,
+  ] =
+    useState(false);
 
-  const [error, setError] = useState("");
+  const [
+    loading,
+    setLoading,
+  ] =
+    useState(false);
 
-  async function handleLogin(event: FormEvent<HTMLFormElement>) {
+  const [
+    googleLoading,
+    setGoogleLoading,
+  ] =
+    useState(false);
+
+  const [
+    resetLoading,
+    setResetLoading,
+  ] =
+    useState(false);
+
+  const [
+    error,
+    setError,
+  ] =
+    useState("");
+
+  const [
+    successMessage,
+    setSuccessMessage,
+  ] =
+    useState("");
+
+  async function handleLogin(
+    event:
+      FormEvent<HTMLFormElement>
+  ) {
     event.preventDefault();
 
     setError("");
+    setSuccessMessage("");
     setLoading(true);
 
     try {
@@ -47,9 +101,14 @@ export default function LoginPage() {
         password
       );
 
-      router.push("/dashboard");
+      router.push(
+        "/dashboard"
+      );
     } catch (error) {
-      console.error(error);
+      console.error(
+        "Login error:",
+        error
+      );
 
       setError(
         "Unable to sign in. Check your email and password."
@@ -61,35 +120,101 @@ export default function LoginPage() {
 
   async function handleGoogleLogin() {
     setError("");
+    setSuccessMessage("");
     setGoogleLoading(true);
 
     try {
-      await signInWithPopup(auth, googleProvider);
+      await signInWithPopup(
+        auth,
+        googleProvider
+      );
 
-      router.push("/dashboard");
+      router.push(
+        "/dashboard"
+      );
     } catch (error) {
-      console.error(error);
+      console.error(
+        "Google login error:",
+        error
+      );
 
-      setError("Google sign-in was unsuccessful.");
+      setError(
+        "Google sign-in was unsuccessful."
+      );
     } finally {
       setGoogleLoading(false);
     }
   }
 
+  async function handleForgotPassword() {
+    setError("");
+    setSuccessMessage("");
+
+    const cleanEmail =
+      email.trim();
+
+    if (!cleanEmail) {
+      setError(
+        "Enter your email address first, then select Forgot password."
+      );
+
+      return;
+    }
+
+    setResetLoading(true);
+
+    try {
+      await sendPasswordResetEmail(
+        auth,
+        cleanEmail
+      );
+
+      setSuccessMessage(
+        "Password reset email sent. Check your inbox and follow the link to reset your password."
+      );
+    } catch (error) {
+      console.error(
+        "Password reset error:",
+        error
+      );
+
+      /*
+        Keep the public error message
+        generic instead of exposing
+        Firebase account information.
+      */
+
+      setError(
+        "We could not send the password reset email. Check the email address and try again."
+      );
+    } finally {
+      setResetLoading(false);
+    }
+  }
+
   return (
     <main className="min-h-screen bg-[#07110d] text-white">
+
       <div className="grid min-h-screen lg:grid-cols-2">
 
         {/* LEFT SIDE */}
+
         <section className="hidden flex-col justify-between border-r border-white/10 bg-gradient-to-br from-[#0b1f17] via-[#07110d] to-black p-12 lg:flex">
 
           <div>
+
             <div className="flex items-center gap-3">
+
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500 text-black">
-                <HeartPulse size={27} />
+
+                <HeartPulse
+                  size={27}
+                />
+
               </div>
 
               <div>
+
                 <h1 className="text-2xl font-bold">
                   Hybrid Human
                 </h1>
@@ -97,32 +222,41 @@ export default function LoginPage() {
                 <p className="text-sm text-slate-400">
                   Human performance platform
                 </p>
+
               </div>
+
             </div>
+
           </div>
 
           <div className="max-w-xl">
+
             <p className="mb-5 text-sm font-semibold uppercase tracking-[0.25em] text-emerald-400">
               Train • Recover • Compete
             </p>
 
             <h2 className="text-5xl font-bold leading-tight">
+
               Turn your health data into
+
               <span className="text-emerald-400">
                 {" "}
                 meaningful performance.
               </span>
+
             </h2>
 
             <p className="mt-6 max-w-lg text-lg leading-8 text-slate-400">
-              Track activity, recovery, sleep, wellness and
-              performance while competing with friends,
-              teams and colleagues.
+              Track activity, recovery, sleep,
+              wellness and performance while
+              competing with friends, teams and
+              colleagues.
             </p>
 
             <div className="mt-10 grid grid-cols-3 gap-4">
 
               <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+
                 <Activity
                   className="mb-4 text-emerald-400"
                   size={25}
@@ -135,9 +269,11 @@ export default function LoginPage() {
                 <p className="mt-1 text-xs text-slate-500">
                   Workouts & steps
                 </p>
+
               </div>
 
               <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+
                 <HeartPulse
                   className="mb-4 text-emerald-400"
                   size={25}
@@ -150,9 +286,11 @@ export default function LoginPage() {
                 <p className="mt-1 text-xs text-slate-500">
                   Sleep & wellness
                 </p>
+
               </div>
 
               <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+
                 <Trophy
                   className="mb-4 text-emerald-400"
                   size={25}
@@ -165,9 +303,11 @@ export default function LoginPage() {
                 <p className="mt-1 text-xs text-slate-500">
                   Points & rankings
                 </p>
+
               </div>
 
             </div>
+
           </div>
 
           <p className="text-sm text-slate-600">
@@ -177,18 +317,27 @@ export default function LoginPage() {
         </section>
 
         {/* RIGHT SIDE */}
+
         <section className="flex items-center justify-center px-6 py-12">
 
           <div className="w-full max-w-md">
 
+            {/* MOBILE LOGO */}
+
             <div className="mb-10 lg:hidden">
+
               <div className="flex items-center gap-3">
 
                 <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500 text-black">
-                  <HeartPulse size={24} />
+
+                  <HeartPulse
+                    size={24}
+                  />
+
                 </div>
 
                 <div>
+
                   <h1 className="text-xl font-bold">
                     Hybrid Human
                   </h1>
@@ -196,12 +345,15 @@ export default function LoginPage() {
                   <p className="text-xs text-slate-500">
                     Train. Recover. Compete.
                   </p>
+
                 </div>
 
               </div>
+
             </div>
 
             <div>
+
               <h2 className="text-3xl font-bold">
                 Welcome back
               </h2>
@@ -209,20 +361,38 @@ export default function LoginPage() {
               <p className="mt-2 text-slate-400">
                 Sign in to continue to Hybrid Human.
               </p>
+
             </div>
 
+            {/* ERROR MESSAGE */}
+
             {error && (
-              <div className="mt-6 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+              <div className="mt-6 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm leading-6 text-red-300">
                 {error}
               </div>
             )}
 
+            {/* SUCCESS MESSAGE */}
+
+            {successMessage && (
+              <div className="mt-6 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm leading-6 text-emerald-300">
+                {successMessage}
+              </div>
+            )}
+
+            {/* LOGIN FORM */}
+
             <form
-              onSubmit={handleLogin}
+              onSubmit={
+                handleLogin
+              }
               className="mt-8 space-y-5"
             >
 
+              {/* EMAIL */}
+
               <div>
+
                 <label
                   htmlFor="email"
                   className="mb-2 block text-sm font-medium text-slate-300"
@@ -234,16 +404,27 @@ export default function LoginPage() {
                   id="email"
                   type="email"
                   required
-                  value={email}
-                  onChange={(event) =>
-                    setEmail(event.target.value)
+                  autoComplete="email"
+                  value={
+                    email
+                  }
+                  onChange={(
+                    event
+                  ) =>
+                    setEmail(
+                      event.target.value
+                    )
                   }
                   placeholder="you@example.com"
                   className="h-12 w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 text-white outline-none transition placeholder:text-slate-600 focus:border-emerald-500"
                 />
+
               </div>
 
+              {/* PASSWORD */}
+
               <div>
+
                 <div className="mb-2 flex items-center justify-between">
 
                   <label
@@ -255,9 +436,26 @@ export default function LoginPage() {
 
                   <button
                     type="button"
-                    className="text-xs text-emerald-400 hover:text-emerald-300"
+                    onClick={
+                      handleForgotPassword
+                    }
+                    disabled={
+                      resetLoading
+                    }
+                    className="flex items-center text-xs text-emerald-400 transition hover:text-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    Forgot password?
+
+                    {resetLoading && (
+                      <Loader2
+                        size={13}
+                        className="mr-1.5 animate-spin"
+                      />
+                    )}
+
+                    {resetLoading
+                      ? "Sending..."
+                      : "Forgot password?"}
+
                   </button>
 
                 </div>
@@ -272,9 +470,16 @@ export default function LoginPage() {
                         : "password"
                     }
                     required
-                    value={password}
-                    onChange={(event) =>
-                      setPassword(event.target.value)
+                    autoComplete="current-password"
+                    value={
+                      password
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      setPassword(
+                        event.target.value
+                      )
                     }
                     placeholder="Enter your password"
                     className="h-12 w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 pr-12 text-white outline-none transition placeholder:text-slate-600 focus:border-emerald-500"
@@ -284,41 +489,67 @@ export default function LoginPage() {
                     type="button"
                     onClick={() =>
                       setShowPassword(
-                        (current) => !current
+                        (
+                          current
+                        ) =>
+                          !current
                       )
                     }
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
+                    aria-label={
+                      showPassword
+                        ? "Hide password"
+                        : "Show password"
+                    }
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 transition hover:text-white"
                   >
+
                     {showPassword ? (
-                      <EyeOff size={19} />
+                      <EyeOff
+                        size={19}
+                      />
                     ) : (
-                      <Eye size={19} />
+                      <Eye
+                        size={19}
+                      />
                     )}
+
                   </button>
 
                 </div>
+
               </div>
+
+              {/* SIGN IN */}
 
               <button
                 type="submit"
-                disabled={loading}
-                className="flex h-12 w-full items-center justify-center rounded-xl bg-emerald-500 font-semibold text-black transition hover:bg-emerald-400 disabled:opacity-60"
+                disabled={
+                  loading ||
+                  googleLoading
+                }
+                className="flex h-12 w-full items-center justify-center rounded-xl bg-emerald-500 font-semibold text-black transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
               >
+
                 {loading ? (
                   <>
+
                     <Loader2
                       size={19}
                       className="mr-2 animate-spin"
                     />
 
                     Signing in...
+
                   </>
                 ) : (
                   "Sign In"
                 )}
+
               </button>
 
             </form>
+
+            {/* DIVIDER */}
 
             <div className="my-7 flex items-center gap-4">
 
@@ -332,14 +563,22 @@ export default function LoginPage() {
 
             </div>
 
+            {/* SOCIAL LOGIN */}
+
             <div className="space-y-3">
 
               <button
                 type="button"
-                onClick={handleGoogleLogin}
-                disabled={googleLoading}
-                className="flex h-12 w-full items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] font-medium transition hover:bg-white/[0.07] disabled:opacity-60"
+                onClick={
+                  handleGoogleLogin
+                }
+                disabled={
+                  googleLoading ||
+                  loading
+                }
+                className="flex h-12 w-full items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] font-medium transition hover:bg-white/[0.07] disabled:cursor-not-allowed disabled:opacity-60"
               >
+
                 {googleLoading ? (
                   <Loader2
                     size={19}
@@ -351,7 +590,10 @@ export default function LoginPage() {
                   </span>
                 )}
 
-                Continue with Google
+                {googleLoading
+                  ? "Signing in..."
+                  : "Continue with Google"}
+
               </button>
 
               <button
@@ -359,17 +601,20 @@ export default function LoginPage() {
                 disabled
                 className="flex h-12 w-full cursor-not-allowed items-center justify-center rounded-xl border border-white/10 bg-white/[0.02] font-medium text-slate-500"
               >
+
                 <Apple
                   size={20}
                   className="mr-3"
                 />
 
                 Continue with Apple
+
               </button>
 
             </div>
 
-            {/* REGISTRATION OPTION */}
+            {/* REGISTRATION */}
+
             <div className="mt-8 border-t border-white/10 pt-7 text-center">
 
               <p className="text-sm text-slate-400">
@@ -390,6 +635,7 @@ export default function LoginPage() {
         </section>
 
       </div>
+
     </main>
   );
 }

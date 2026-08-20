@@ -11,7 +11,9 @@ export type WorkoutScoreResult = {
   points: number;
 };
 
-export function calculateMaxHeartRate(age: number) {
+export function calculateMaxHeartRate(
+  age: number
+) {
   return 220 - age;
 }
 
@@ -38,23 +40,33 @@ export function calculateHeartRatePercentage(
 export function getHeartRateZone(
   percentage: number
 ) {
-  if (percentage >= 90) {
+  if (
+    percentage >= 90
+  ) {
     return "90%+";
   }
 
-  if (percentage >= 80) {
+  if (
+    percentage >= 80
+  ) {
     return "80-89%";
   }
 
-  if (percentage >= 70) {
+  if (
+    percentage >= 70
+  ) {
     return "70-79%";
   }
 
-  if (percentage >= 60) {
+  if (
+    percentage >= 60
+  ) {
     return "60-69%";
   }
 
-  if (percentage >= 50) {
+  if (
+    percentage >= 50
+  ) {
     return "50-59%";
   }
 
@@ -66,26 +78,27 @@ export function calculatePoints(
   durationMinutes: number
 ) {
   /*
-    HYBRID HUMAN MVP SCORING
+    HYBRID HUMAN WORKOUT SCORING
 
-    80%+ for 60 min = 50
-    80%+ for 30 min = 30
+    Max heart rate:
+    220 - age
 
-    70%+ for 60 min = 30
-    70%+ for 30 min = 20
+    Scoring rules:
 
-    60%+ for 60 min = 20
-    60%+ for 30 min = 10
+    80%+ max HR for 30+ min = 30 points
 
-    50%+ for 60 min = 10
+    70%+ max HR for 60+ min = 30 points
+
+    70%+ max HR for 30+ min = 20 points
+
+    60%+ max HR for 60+ min = 20 points
+
+    60%+ max HR for 30+ min = 10 points
+
+    50%+ max HR for 60+ min = 10 points
+
+    Anything below these thresholds = 0 points
   */
-
-  if (
-    heartRatePercentage >= 80 &&
-    durationMinutes >= 60
-  ) {
-    return 50;
-  }
 
   if (
     heartRatePercentage >= 80 &&
@@ -138,7 +151,9 @@ export function scoreWorkout({
   durationMinutes,
 }: WorkoutScoreInput): WorkoutScoreResult {
   const maxHeartRate =
-    calculateMaxHeartRate(age);
+    calculateMaxHeartRate(
+      age
+    );
 
   const heartRatePercentage =
     calculateHeartRatePercentage(

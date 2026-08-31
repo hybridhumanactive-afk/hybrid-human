@@ -172,6 +172,80 @@ export default function LeaderboardPage() {
     );
   }
 
+  async function syncGoogleFitBeforeLeaderboard(
+    user: NonNullable<typeof auth.currentUser>
+  ) {
+    try {
+      const idToken =
+        await user.getIdToken(
+          true
+        );
+
+      const response =
+        await fetch(
+          "/api/google-fit/sync",
+          {
+            method: "POST",
+
+            headers: {
+              Authorization:
+                `Bearer ${idToken}`,
+
+              "Content-Type":
+                "application/json",
+            },
+
+            cache: "no-store",
+          }
+        );
+
+      const responseText =
+        await response.text();
+
+      let data: {
+        success?: boolean;
+        error?: string;
+      } = {};
+
+      if (responseText) {
+        try {
+          data =
+            JSON.parse(
+              responseText
+            );
+        } catch {
+          console.log(
+            "Google Fit sync returned invalid JSON before leaderboard load."
+          );
+
+          return false;
+        }
+      }
+
+      if (
+        !response.ok ||
+        !data.success
+      ) {
+        console.log(
+          "Google Fit sync skipped before leaderboard load:",
+          data.error ||
+            `HTTP ${response.status}`
+        );
+
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.log(
+        "Google Fit sync unavailable before leaderboard load:",
+        error
+      );
+
+      return false;
+    }
+  }
+
   useEffect(() => {
     const unsubscribe =
       onAuthStateChanged(
@@ -190,6 +264,10 @@ export default function LeaderboardPage() {
           );
 
           try {
+            await syncGoogleFitBeforeLeaderboard(
+              user
+            );
+
             await syncLeaderboard(
               user.uid
             );

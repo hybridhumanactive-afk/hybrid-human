@@ -36,6 +36,7 @@ import {
   Settings,
   SmilePlus,
   Trophy,
+  Target,
   UserRound,
   Watch,
   Zap,
@@ -870,6 +871,20 @@ export default function DashboardPage() {
 
             <SidebarButton
               icon={
+                <Target
+                  size={19}
+                />
+              }
+              label="Challenges"
+              onClick={() =>
+                router.push(
+                  "/challenges"
+                )
+              }
+            />
+
+            <SidebarButton
+              icon={
                 <Watch
                   size={19}
                 />
@@ -1134,10 +1149,10 @@ export default function DashboardPage() {
 
             </div>
 
-            <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
 
               <QuickAction
-                title="Add Workout"
+                title="Workouts"
                 subtitle={`${weeklyWorkoutCount} this week`}
                 icon={
                   <Dumbbell
@@ -1201,6 +1216,34 @@ export default function DashboardPage() {
                   router.push(
                     "/devices"
                   )
+                }
+              />
+
+              <QuickAction
+                title="Challenges"
+                subtitle="Create, invite & compete"
+                icon={
+                  <Target
+                    size={20}
+                  />
+                }
+                onClick={() =>
+                  router.push(
+                    "/challenges"
+                  )
+                }
+              />
+
+              <QuickAction
+                title="Log Out"
+                subtitle="Sign out of Hybrid Human"
+                icon={
+                  <LogOut
+                    size={20}
+                  />
+                }
+                onClick={
+                  handleLogout
                 }
               />
 
@@ -1304,7 +1347,7 @@ export default function DashboardPage() {
                       </p>
 
                       <p className="mt-2 max-w-sm text-sm text-slate-500">
-                        Add a manual workout or connect a supported device.
+                        Connect Google Fit to import and score your workouts automatically.
                       </p>
 
                       <button
@@ -1316,7 +1359,7 @@ export default function DashboardPage() {
                         }
                         className="mt-5 rounded-xl bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-emerald-400"
                       >
-                        Add Workout
+                        View Workouts
                       </button>
 
                     </div>
